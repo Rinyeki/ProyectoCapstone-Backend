@@ -73,8 +73,6 @@ Autenticación (`/auth`):
 - `POST /auth/change-password` – Cambia contraseña (JWT).
 - `POST /auth/request-email-change` – Solicita cambio de correo, envía token al correo actual (JWT, cooldown 30s, `429` con `Retry-After` si aplica).
 - `POST /auth/confirm-email-change` – Confirma cambio de correo con token (JWT). Envía confirmación al correo nuevo y aviso al anterior.
-- `POST /auth/request-password-change` – Solicita cambio de contraseña, envía token al correo actual (JWT).
-- `POST /auth/confirm-password-change` – Confirma cambio de contraseña con token (JWT).
 - `PATCH /auth/update-name` – Actualiza nombre (JWT).
 - `POST /auth/set-rut` – Establece RUT luego de login si está vacío (JWT).
 
