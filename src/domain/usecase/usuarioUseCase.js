@@ -21,6 +21,22 @@ class UsuarioUseCase extends UsuarioInputPort {
   async getPymes(id, filters = {}) {
     return await this.usuarioRepository.findUserPymes(id, filters);
   }
+
+  async list(filters = {}) {
+    return await this.usuarioRepository.findAll(filters);
+  }
+
+  async create(data) {
+    return await this.usuarioRepository.create(data);
+  }
+
+  async update(id, data) {
+    return await this.usuarioRepository.update(id, data);
+  }
+
+  async delete(id) {
+    return await this.usuarioRepository.delete(id);
+  }
 }
 
 module.exports = { UsuarioUseCase };

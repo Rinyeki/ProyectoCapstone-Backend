@@ -12,7 +12,7 @@ UsuarioEntity.init(
     },
     rut_chileno: {
       type: DataTypes.TEXT,
-      allowNull: false,
+      allowNull: true,
       unique: true,
     },
     nombre: {

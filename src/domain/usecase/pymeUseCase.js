@@ -13,6 +13,22 @@ class PymeUseCase extends PymeInputPort {
   async list(filters = {}) {
     return await this.pymesRepository.findAll(filters);
   }
+
+  async getById(id) {
+    return await this.pymesRepository.findById(id);
+  }
+
+  async create(data) {
+    return await this.pymesRepository.create(data);
+  }
+
+  async update(id, data) {
+    return await this.pymesRepository.update(id, data);
+  }
+
+  async delete(id) {
+    return await this.pymesRepository.delete(id);
+  }
 }
 
 module.exports = { PymeUseCase };

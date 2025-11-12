@@ -3,6 +3,7 @@ const { UsuarioEntity } = require('../entities/usuarioEntity');
 const { PymeEntity } = require('../entities/pymeEntity');
 const { UsuarioMapper } = require('../mapper/usuarioMapper');
 const { PymeMapper } = require('../mapper/pymeMapper');
+const bcrypt = require('bcryptjs');
 
 class UsuarioSequelizeRepository extends UsuariosRepository {
   async findById(id) {
@@ -23,6 +24,39 @@ class UsuarioSequelizeRepository extends UsuariosRepository {
       order: [['id', 'ASC']],
     });
     return PymeMapper.toDomainList(entities);
+  }
+
+  async findAll(filters = {}) {
+    const entities = await UsuarioEntity.findAll({
+      where: { ...filters },
+      order: [['id', 'ASC']],
+    });
+    return entities.map(UsuarioMapper.toDomain);
+  }
+
+  async create(data) {
+    const payload = { ...data };
+    if (payload.contraseña) {
+      payload.contraseña = await bcrypt.hash(payload.contraseña, 10);
+    }
+    const created = await UsuarioEntity.create(payload);
+    return UsuarioMapper.toDomain(created);
+  }
+
+  async update(id, data) {
+    const entity = await UsuarioEntity.findByPk(id);
+    if (!entity) return null;
+    const payload = { ...data };
+    if (payload.contraseña) {
+      payload.contraseña = await bcrypt.hash(payload.contraseña, 10);
+    }
+    await entity.update(payload);
+    return UsuarioMapper.toDomain(entity);
+  }
+
+  async delete(id) {
+    const count = await UsuarioEntity.destroy({ where: { id } });
+    return count > 0;
   }
 }
 
