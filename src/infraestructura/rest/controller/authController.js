@@ -36,7 +36,7 @@ router.get('/google/callback', (req, res, next) => {
 
 // Registro de usuario (self-signup)
 const bcrypt = require('bcryptjs');
-const { UsuarioEntity } = require('../../entities/usuarioEntity');
+const { UsuarioEntity } = require('../../entities/index');
 router.post('/register', async (req, res) => {
   try {
     let { correo, contraseña, nombre, rut_chileno, rol } = req.body;

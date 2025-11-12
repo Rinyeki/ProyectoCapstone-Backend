@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const { PymeEntity } = require('../entities/pymeEntity');
+const { PymeEntity } = require('../entities/index');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret';
 
