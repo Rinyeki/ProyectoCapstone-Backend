@@ -166,12 +166,12 @@ router.post('/request-email-change', authenticateJWT, async (req, res) => {
     const subject = 'Verificación de cambio de correo';
     const text = `Hola ${user.nombre || ''},\n\n` +
       `Solicitaste cambiar tu correo a: ${newEmail}.\n` +
-      `Usa este token para confirmar: ${token}.\n` +
+      `Usa este token para confirmar: ${token}\n` +
       `Este token expira a las ${expires.toISOString()}.\n\n` +
       `Si no solicitaste este cambio, ignora este mensaje.`;
     const html = `<p>Hola ${user.nombre || ''},</p>
       <p>Solicitaste cambiar tu correo a: <b>${newEmail}</b>.</p>
-      <p>Usa este token para confirmar: <code>${token}</code>.</p>
+      <p>Usa este token para confirmar: <code>${token}</code></p>
       <p>Este token expira a las <b>${expires.toISOString()}</b>.</p>
       <p>Si no solicitaste este cambio, ignora este mensaje.</p>`;
     const mail = await sendVerificationEmail({ to: user.correo, subject, text, html });
@@ -210,79 +210,53 @@ router.post('/confirm-email-change', authenticateJWT, async (req, res) => {
       await user.update({ email_change_token: null, email_change_expires: null, email_change_new: null });
       return res.status(410).json({ message: 'Token expirado' });
     }
+    const oldEmail = user.correo;
     const newEmail = user.email_change_new;
     await user.update({ correo: newEmail, email_change_token: null, email_change_expires: null, email_change_new: null });
+
+    // Intentar enviar correo de confirmación al nuevo correo
+    const subject = 'Confirmación: tu correo fue actualizado';
+    const text = `Hola ${user.nombre || ''},\n\n` +
+      `Tu correo asociado a la cuenta ha sido actualizado correctamente.\n` +
+      `Anterior: ${oldEmail}\n` +
+      `Nuevo: ${newEmail}\n\n` +
+      `Si no realizaste este cambio, por favor contáctanos inmediatamente o restablece tu contraseña.`;
+    const html = `<p>Hola ${user.nombre || ''},</p>
+      <p>Tu correo asociado a la cuenta ha sido <b>actualizado</b> correctamente.</p>
+      <p><b>Anterior:</b> ${oldEmail}<br/><b>Nuevo:</b> ${newEmail}</p>
+      <p>Si no realizaste este cambio, contáctanos inmediatamente o restablece tu contraseña.</p>`;
+    const mail = await sendVerificationEmail({ to: newEmail, subject, text, html });
+
+    // Notificación de seguridad al correo anterior
+    const subjectOld = 'Aviso de seguridad: tu correo fue cambiado';
+    const textOld = `Hola ${user.nombre || ''},\n\n` +
+      `Se registró un cambio de correo en tu cuenta.\n` +
+      `Anterior: ${oldEmail}\n` +
+      `Nuevo: ${newEmail}\n\n` +
+      `Si no realizaste este cambio, por favor restablece tu contraseña y contáctanos.`;
+    const htmlOld = `<p>Hola ${user.nombre || ''},</p>
+      <p>Se registró un cambio de correo en tu cuenta.</p>
+      <p><b>Anterior:</b> ${oldEmail}<br/><b>Nuevo:</b> ${newEmail}</p>
+      <p>Si no realizaste este cambio, restablece tu contraseña y contáctanos.</p>`;
+    const mailOld = await sendVerificationEmail({ to: oldEmail, subject: subjectOld, text: textOld, html: htmlOld });
+
     const tokenJwt = signToken(user);
-    return res.status(200).json({ message: 'Correo actualizado', token: tokenJwt });
+    const response = { message: 'Correo actualizado', token: tokenJwt };
+    // Estado de envío al nuevo correo
+    response.email_nuevo = (!mail || !mail.sent)
+      ? { sent: false, reason: (mail && mail.reason) || 'No enviado' }
+      : { sent: true };
+    // Estado de envío de notificación al correo anterior
+    response.email_anterior = (!mailOld || !mailOld.sent)
+      ? { sent: false, reason: (mailOld && mailOld.reason) || 'No enviado' }
+      : { sent: true };
+    return res.status(200).json(response);
   } catch (err) {
     console.error(err);
     return res.status(400).json({ message: 'Error al confirmar cambio de correo' });
   }
 });
 
-// Solicitar cambio de contraseña (envía token al correo actual)
-router.post('/request-password-change', authenticateJWT, async (req, res) => {
-  try {
-    const user = await UsuarioEntity.findByPk(req.user.id);
-    if (!user) return res.status(404).json({ message: 'Usuario no encontrado' });
-    const token = crypto.randomBytes(24).toString('hex');
-    const expires = new Date(Date.now() + 15 * 60 * 1000);
-    await user.update({ password_change_token: token, password_change_expires: expires });
-    // Enviar correo real al correo actual con el token
-    const subject = 'Verificación de cambio de contraseña';
-    const text = `Hola ${user.nombre || ''},\n\n` +
-      `Solicitaste cambiar tu contraseña.\n` +
-      `Usa este token para confirmar: ${token}.\n` +
-      `Este token expira a las ${expires.toISOString()}.\n\n` +
-      `Si no solicitaste este cambio, ignora este mensaje.`;
-    const html = `<p>Hola ${user.nombre || ''},</p>
-      <p>Solicitaste cambiar tu contraseña.</p>
-      <p>Usa este token para confirmar: <code>${token}</code>.</p>
-      <p>Este token expira a las <b>${expires.toISOString()}</b>.</p>
-      <p>Si no solicitaste este cambio, ignora este mensaje.</p>`;
-    const mail = await sendVerificationEmail({ to: user.correo, subject, text, html });
-    const response = { message: 'Token de verificación generado', expiresAt: user.password_change_expires };
-    if (process.env.NODE_ENV !== 'production') response.debugToken = token;
-    if (!mail || !mail.sent) {
-      response.email = { sent: false, reason: (mail && mail.reason) || 'No enviado' };
-      if (process.env.NODE_ENV === 'production') {
-        return res.status(500).json({ message: 'No se pudo enviar el correo de verificación' });
-      }
-    } else {
-      response.email = { sent: true };
-    }
-    return res.status(200).json(response);
-  } catch (err) {
-    console.error(err);
-    return res.status(400).json({ message: 'Error al solicitar cambio de contraseña' });
-  }
-});
-
-// Confirmar cambio de contraseña (requiere token y nueva contraseña)
-router.post('/confirm-password-change', authenticateJWT, async (req, res) => {
-  try {
-    const { token, newPassword } = req.body;
-    if (!token || !newPassword) return res.status(400).json({ message: 'token y newPassword son requeridos' });
-    const user = await UsuarioEntity.findByPk(req.user.id);
-    if (!user) return res.status(404).json({ message: 'Usuario no encontrado' });
-    if (!user.password_change_token || !user.password_change_expires) {
-      return res.status(400).json({ message: 'No hay cambio de contraseña pendiente' });
-    }
-    if (user.password_change_token !== token) {
-      return res.status(401).json({ message: 'Token inválido' });
-    }
-    if (new Date() > new Date(user.password_change_expires)) {
-      await user.update({ password_change_token: null, password_change_expires: null });
-      return res.status(410).json({ message: 'Token expirado' });
-    }
-    const hashed = await bcrypt.hash(newPassword, 10);
-    await user.update({ contraseña: hashed, password_change_token: null, password_change_expires: null });
-    return res.status(200).json({ message: 'Contraseña actualizada' });
-  } catch (err) {
-    console.error(err);
-    return res.status(400).json({ message: 'Error al confirmar cambio de contraseña' });
-  }
-});
 
 // Actualizar nombre (no requiere verificación por correo)
 router.patch('/update-name', authenticateJWT, async (req, res) => {
