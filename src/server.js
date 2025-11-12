@@ -1,8 +1,6 @@
 const app = require('./app');
 const { initDb } = require('./infraestructura/db/sequelize');
-const { setupAssociations } = require('./infraestructura/entities/index');
-const { UsuarioEntity } = require('./infraestructura/entities/usuarioEntity');
-const { PymeEntity } = require('./infraestructura/entities/pymeEntity');
+const { setupAssociations, UsuarioEntity, PymeEntity } = require('./infraestructura/entities/index');
 
 const PORT = process.env.PORT || 3000;
 
@@ -14,7 +12,7 @@ const PORT = process.env.PORT || 3000;
     const uCount = await UsuarioEntity.count();
     if (uCount === 0) {
       await UsuarioEntity.create({
-        rut_chileno: '12.345.678-9',
+        rut_chileno: '12345678-9',
         nombre: 'Usuario Demo',
         correo: 'demo@correo.cl',
         contraseña: 'secret',
@@ -25,9 +23,9 @@ const PORT = process.env.PORT || 3000;
     if (pCount === 0) {
       await PymeEntity.create({
         nombre: 'Pyme Demo',
-        rut_empresa: '76.123.456-7',
+        rut_empresa: '76123456-7',
         descripcion: 'Descripción de demo',
-        rut_chileno: '12.345.678-9',
+        rut_chileno: '12345678-9',
         estado: 'activo',
       });
     }
