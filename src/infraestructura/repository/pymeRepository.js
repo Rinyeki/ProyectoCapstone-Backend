@@ -1,6 +1,5 @@
 const { PymesRepository } = require('../../domain/ports/output/pymeOutputport');
-const { PymeEntity } = require('../entities/pymeEntity');
-const { UsuarioEntity } = require('../entities/usuarioEntity');
+const { PymeEntity, UsuarioEntity } = require('../entities/index');
 const { PymeMapper } = require('../mapper/pymeMapper');
 const { normalizeRut } = require('../../domain/utils/rut');
 

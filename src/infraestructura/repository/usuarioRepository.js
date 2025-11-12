@@ -1,6 +1,5 @@
 const { UsuariosRepository } = require('../../domain/ports/output/usuarioOutputport');
-const { UsuarioEntity } = require('../entities/usuarioEntity');
-const { PymeEntity } = require('../entities/pymeEntity');
+const { UsuarioEntity, PymeEntity } = require('../entities/index');
 const { UsuarioMapper } = require('../mapper/usuarioMapper');
 const { PymeMapper } = require('../mapper/pymeMapper');
 const bcrypt = require('bcryptjs');
