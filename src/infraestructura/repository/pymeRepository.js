@@ -1,6 +1,6 @@
 const { PymesRepository } = require('../../domain/ports/output/pymeOutputport');
 const { PymeEntity, UsuarioEntity } = require('../entities/index');
-const { PymeMapper } = require('../mapper/pymeMapper');
+const { PymeMapper } = require('../mapper/PymeMapper.js');
 const { normalizeRut } = require('../../domain/utils/rut');
 
 class PymeSequelizeRepository extends PymesRepository {

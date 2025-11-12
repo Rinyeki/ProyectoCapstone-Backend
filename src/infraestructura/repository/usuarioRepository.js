@@ -1,7 +1,7 @@
 const { UsuariosRepository } = require('../../domain/ports/output/usuarioOutputport');
 const { UsuarioEntity, PymeEntity } = require('../entities/index');
 const { UsuarioMapper } = require('../mapper/usuarioMapper');
-const { PymeMapper } = require('../mapper/pymeMapper');
+const { PymeMapper } = require('../mapper/PymeMapper.js');
 const bcrypt = require('bcryptjs');
 
 class UsuarioSequelizeRepository extends UsuariosRepository {
