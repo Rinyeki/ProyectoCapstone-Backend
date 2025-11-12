@@ -65,5 +65,37 @@ DB_PORT=5432
 
 ## Endpoints
 
-- `GET /health` – Healthcheck.
-- `GET /pymes` – Lista pymes desde la base de datos.
+Autenticación (`/auth`):
+- `POST /auth/login` – Login local, devuelve JWT y `requiresRut`.
+- `GET /auth/google` – Inicio de OAuth Google.
+- `GET /auth/google/callback` – Callback de OAuth Google, devuelve JWT.
+- `POST /auth/register` – Registro self-signup.
+- `POST /auth/change-password` – Cambia contraseña (JWT).
+- `POST /auth/request-email-change` – Solicita cambio de correo, envía token al correo actual (JWT, cooldown 30s, `429` con `Retry-After` si aplica).
+- `POST /auth/confirm-email-change` – Confirma cambio de correo con token (JWT). Envía confirmación al correo nuevo y aviso al anterior.
+- `POST /auth/request-password-change` – Solicita cambio de contraseña, envía token al correo actual (JWT).
+- `POST /auth/confirm-password-change` – Confirma cambio de contraseña con token (JWT).
+- `PATCH /auth/update-name` – Actualiza nombre (JWT).
+- `POST /auth/set-rut` – Establece RUT luego de login si está vacío (JWT).
+
+Usuarios (`/usuarios`):
+- `GET /usuarios` – Lista usuarios (admin).
+- `GET /usuarios/:id` – Obtiene usuario por id (self o admin).
+- `GET /usuarios/:id/con-filtros` – Obtiene usuario por id aplicando filtros (self o admin).
+- `GET /usuarios/:id/pymes` – Lista pymes del usuario (self o admin).
+- `POST /usuarios` – Crea usuario (admin).
+- `PUT /usuarios/:id` – Actualiza usuario (admin).
+- `DELETE /usuarios/:id` – Elimina usuario (admin).
+
+Pymes (`/pymes`):
+- `GET /pymes` – Lista pymes (admin).
+- `GET /pymes/:id` – Obtiene pyme por id (admin o dueño).
+- `POST /pymes` – Crea pyme (autenticado; usuarios normales crean para su propio `rut_chileno`).
+- `PUT /pymes/:id` – Actualiza pyme (admin o dueño).
+- `DELETE /pymes/:id` – Elimina pyme (admin o dueño).
+
+Notas:
+- Autenticación JWT: enviar `Authorization: Bearer <token>`.
+- El JWT incluye `id`, `rol`, `rut_chileno`, `correo`, `nombre`.
+- SMTP para correos: configurar `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_SECURE`, `FROM_EMAIL`. Para Gmail: `587` con `SMTP_SECURE=false` (STARTTLS) o `465` con `SMTP_SECURE=true`.
+- Cooldown de reenvío de token de cambio de correo: 30s; respuesta `429` incluye cabecera `Retry-After`.
