@@ -155,13 +155,26 @@ router.post('/request-email-change', authenticateJWT, async (req, res) => {
     if (!nuevo_correo) return res.status(400).json({ message: 'nuevo_correo es requerido' });
     const user = await UsuarioEntity.findByPk(req.user.id);
     if (!user) return res.status(404).json({ message: 'Usuario no encontrado' });
+    // Cooldown de 30 segundos para evitar spam de envío
+    const COOLDOWN_MS = 30 * 1000;
+    if (user.email_change_last_sent) {
+      const diff = Date.now() - new Date(user.email_change_last_sent).getTime();
+      if (diff < COOLDOWN_MS) {
+        const retryAfterSec = Math.ceil((COOLDOWN_MS - diff) / 1000);
+        res.set('Retry-After', String(retryAfterSec));
+        return res.status(429).json({
+          message: `Debes esperar ${retryAfterSec} segundos antes de solicitar otro token`,
+          retryAfterSeconds: retryAfterSec,
+        });
+      }
+    }
     const newEmail = String(nuevo_correo).toLowerCase().trim();
     if (newEmail === user.correo) return res.status(400).json({ message: 'El nuevo correo es igual al actual' });
     const exists = await UsuarioEntity.findOne({ where: { correo: newEmail } });
     if (exists) return res.status(409).json({ message: 'Correo ya registrado' });
     const token = crypto.randomBytes(24).toString('hex');
     const expires = new Date(Date.now() + 15 * 60 * 1000);
-    await user.update({ email_change_new: newEmail, email_change_token: token, email_change_expires: expires });
+    await user.update({ email_change_new: newEmail, email_change_token: token, email_change_expires: expires, email_change_last_sent: new Date() });
     // Enviar correo real al correo actual con el token
     const subject = 'Verificación de cambio de correo';
     const text = `Hola ${user.nombre || ''},\n\n` +
@@ -212,7 +225,7 @@ router.post('/confirm-email-change', authenticateJWT, async (req, res) => {
     }
     const oldEmail = user.correo;
     const newEmail = user.email_change_new;
-    await user.update({ correo: newEmail, email_change_token: null, email_change_expires: null, email_change_new: null });
+    await user.update({ correo: newEmail, email_change_token: null, email_change_expires: null, email_change_new: null, email_change_last_sent: null });
 
     // Intentar enviar correo de confirmación al nuevo correo
     const subject = 'Confirmación: tu correo fue actualizado';

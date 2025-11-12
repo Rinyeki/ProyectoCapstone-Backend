@@ -44,6 +44,11 @@ UsuarioEntity.init(
       type: DataTypes.TEXT,
       allowNull: true,
     },
+    // Control de envío para rate limit de solicitud de cambio de correo
+    email_change_last_sent: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
     password_change_token: {
       type: DataTypes.TEXT,
       allowNull: true,

@@ -139,6 +139,18 @@ BEGIN
         ELSE to_jsonb("redes")
       END;
   END IF;
+
+  -- Añadir columna de cooldown para solicitud de cambio de correo si no existe
+  IF NOT EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'usuario'
+      AND column_name = 'email_change_last_sent'
+  ) THEN
+    ALTER TABLE "public"."usuario"
+      ADD COLUMN "email_change_last_sent" timestamp with time zone NULL;
+  END IF;
 END $$;
 `);
     // Sync sin alter para evitar casts erróneos en ENUM[] generados por Sequelize
