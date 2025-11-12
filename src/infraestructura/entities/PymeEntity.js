@@ -57,16 +57,20 @@ PymeEntity.init(
       type: DataTypes.TEXT,
       allowNull: true,
     },
+    // Múltiples tipos de servicio (array)
     tipo_servicio: {
-      type: DataTypes.TEXT,
+      type: DataTypes.ARRAY(DataTypes.TEXT),
       allowNull: true,
     },
+    // Múltiples tipos de atención (array), manteniendo textos: Presencial, A Domicilio, Online
     tipo_atencion: {
-      type: DataTypes.ENUM('Presencial', 'A Domicilio', 'Online'),
+      type: DataTypes.ARRAY(
+        DataTypes.ENUM('Presencial', 'A Domicilio', 'Online')
+      ),
       allowNull: true,
     },
     etiquetas: {
-      type: DataTypes.TEXT,
+      type: DataTypes.JSONB,
       allowNull: true,
     },
     horario_atencion: {
@@ -78,7 +82,7 @@ PymeEntity.init(
       allowNull: true,
     },
     redes: {
-      type: DataTypes.TEXT,
+      type: DataTypes.JSONB,
       allowNull: true,
     },
     estado: {

@@ -2,6 +2,7 @@ const passport = require('passport');
 const LocalStrategy = require('passport-local').Strategy;
 const { OAuth2Strategy } = require('passport-google-oauth');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const { UsuarioEntity } = require('../entities/index');
 
 function configurePassport() {
@@ -41,11 +42,21 @@ function configurePassport() {
         { clientID, clientSecret, callbackURL },
         async (accessToken, refreshToken, profile, done) => {
           try {
-            const email = (profile.emails && profile.emails[0] && profile.emails[0].value) || null;
-            if (!email) return done(null, false, { message: 'Google no entregó correo' });
-            const user = await UsuarioEntity.findOne({ where: { correo: email } });
+            const emailRaw = (profile.emails && profile.emails[0] && profile.emails[0].value) || null;
+            if (!emailRaw) return done(null, false, { message: 'Google no entregó correo' });
+            const email = String(emailRaw).toLowerCase();
+            let user = await UsuarioEntity.findOne({ where: { correo: email } });
             if (!user) {
-              return done(null, false, { message: 'Usuario no registrado con ese correo' });
+              const displayName = profile.displayName || email.split('@')[0];
+              const random = crypto.randomBytes(16).toString('hex');
+              const hashed = await bcrypt.hash(random, 10);
+              user = await UsuarioEntity.create({
+                correo: email,
+                contraseña: hashed,
+                nombre: displayName,
+                rut_chileno: null,
+                rol: 'usuario',
+              });
             }
             return done(null, user);
           } catch (err) {

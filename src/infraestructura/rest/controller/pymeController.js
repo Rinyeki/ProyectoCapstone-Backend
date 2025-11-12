@@ -58,6 +58,61 @@ router.post('/', authenticateJWT, async (req, res) => {
     if (!isValidRut(data.rut_empresa)) {
       return res.status(400).json({ message: 'RUT de empresa inválido. Formato esperado: 12345678-K' });
     }
+    // Normalización: aceptar string o array y guardar en campos múltiples
+    const permitidosAtencion = ['Presencial', 'A Domicilio', 'Online'];
+    if (data.tipo_atencion) {
+      const toArray = Array.isArray(data.tipo_atencion) ? data.tipo_atencion : [data.tipo_atencion];
+      const mapped = toArray.map((v) => String(v).trim());
+      for (const v of mapped) {
+        if (!permitidosAtencion.includes(v)) {
+          return res.status(400).json({ message: `tipo_atencion inválido: ${v}. Permitidos: ${permitidosAtencion.join(', ')}` });
+        }
+      }
+      data.tipo_atencion = mapped;
+    }
+    if (data.tipo_servicio) {
+      const toArray = Array.isArray(data.tipo_servicio) ? data.tipo_servicio : [data.tipo_servicio];
+      data.tipo_servicio = toArray.map((v) => String(v).trim()).filter((v) => v.length > 0);
+    }
+    // Normalización para etiquetas (JSONB): aceptar array u string
+    if (data.etiquetas) {
+      if (Array.isArray(data.etiquetas)) {
+        data.etiquetas = data.etiquetas.map((v) => String(v).trim()).filter((v) => v.length > 0);
+      } else if (typeof data.etiquetas === 'string') {
+        const s = data.etiquetas.trim();
+        try {
+          const parsed = JSON.parse(s);
+          if (Array.isArray(parsed)) {
+            data.etiquetas = parsed.map((v) => String(v).trim()).filter((v) => v.length > 0);
+          } else {
+            // Si es objeto u otro JSON, lo guardamos tal cual
+            data.etiquetas = parsed;
+          }
+        } catch {
+          // Split por comas si no es JSON
+          data.etiquetas = s.split(',').map((v) => v.trim()).filter((v) => v.length > 0);
+        }
+      }
+      // Otros tipos (objeto) se guardan tal cual en JSONB
+    }
+    // Normalización para redes (JSONB): preferir objeto; intentar parse si viene string
+    if (data.redes) {
+      if (typeof data.redes === 'string') {
+        const s = data.redes.trim();
+        try {
+          const parsed = JSON.parse(s);
+          if (parsed && typeof parsed === 'object') {
+            data.redes = parsed;
+          } else {
+            return res.status(400).json({ message: 'redes debe ser un objeto o JSON válido' });
+          }
+        } catch {
+          return res.status(400).json({ message: 'redes debe ser un objeto o JSON válido' });
+        }
+      } else if (Array.isArray(data.redes)) {
+        return res.status(400).json({ message: 'redes debe ser un objeto' });
+      }
+    }
     const creada = await useCase.create(data);
     res.status(201).json(creada);
   } catch (err) {
@@ -84,6 +139,58 @@ router.put('/:id', authenticateJWT, authorizePymeOwnershipOrAdmin, async (req, r
       data.rut_empresa = normalizeRut(data.rut_empresa);
       if (!isValidRut(data.rut_empresa)) {
         return res.status(400).json({ message: 'RUT de empresa inválido. Formato esperado: 12345678-K' });
+      }
+    }
+    // Normalización: aceptar string o array y guardar en campos múltiples
+    const permitidosAtencion2 = ['Presencial', 'A Domicilio', 'Online'];
+    if (data.tipo_atencion) {
+      const toArray = Array.isArray(data.tipo_atencion) ? data.tipo_atencion : [data.tipo_atencion];
+      const mapped = toArray.map((v) => String(v).trim());
+      for (const v of mapped) {
+        if (!permitidosAtencion2.includes(v)) {
+          return res.status(400).json({ message: `tipo_atencion inválido: ${v}. Permitidos: ${permitidosAtencion2.join(', ')}` });
+        }
+      }
+      data.tipo_atencion = mapped;
+    }
+    if (data.tipo_servicio) {
+      const toArray = Array.isArray(data.tipo_servicio) ? data.tipo_servicio : [data.tipo_servicio];
+      data.tipo_servicio = toArray.map((v) => String(v).trim()).filter((v) => v.length > 0);
+    }
+    // Normalización para etiquetas (JSONB)
+    if (data.etiquetas) {
+      if (Array.isArray(data.etiquetas)) {
+        data.etiquetas = data.etiquetas.map((v) => String(v).trim()).filter((v) => v.length > 0);
+      } else if (typeof data.etiquetas === 'string') {
+        const s = data.etiquetas.trim();
+        try {
+          const parsed = JSON.parse(s);
+          if (Array.isArray(parsed)) {
+            data.etiquetas = parsed.map((v) => String(v).trim()).filter((v) => v.length > 0);
+          } else {
+            data.etiquetas = parsed;
+          }
+        } catch {
+          data.etiquetas = s.split(',').map((v) => v.trim()).filter((v) => v.length > 0);
+        }
+      }
+    }
+    // Normalización para redes (JSONB)
+    if (data.redes) {
+      if (typeof data.redes === 'string') {
+        const s = data.redes.trim();
+        try {
+          const parsed = JSON.parse(s);
+          if (parsed && typeof parsed === 'object') {
+            data.redes = parsed;
+          } else {
+            return res.status(400).json({ message: 'redes debe ser un objeto o JSON válido' });
+          }
+        } catch {
+          return res.status(400).json({ message: 'redes debe ser un objeto o JSON válido' });
+        }
+      } else if (Array.isArray(data.redes)) {
+        return res.status(400).json({ message: 'redes debe ser un objeto' });
       }
     }
     const actualizada = await useCase.update(req.params.id, data);

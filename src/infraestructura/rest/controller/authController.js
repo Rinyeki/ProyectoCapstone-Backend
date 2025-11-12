@@ -1,11 +1,53 @@
 const express = require('express');
 const passport = require('passport');
+const nodemailer = require('nodemailer');
 const { configurePassport } = require('../../auth/passport');
 const { signToken } = require('../../middleware/auth');
 const { normalizeRut, isValidRut } = require('../../../domain/utils/rut');
 
 const router = express.Router();
 configurePassport();
+
+// Configuración de Nodemailer usando variables de entorno
+// SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_SECURE ("true"/"false"), FROM_EMAIL
+let mailTransport = null;
+function getMailTransport() {
+  if (mailTransport) return mailTransport;
+  const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_SECURE, SMTP_DEBUG } = process.env;
+  if (!SMTP_HOST || !SMTP_PORT || !SMTP_USER || !SMTP_PASS) {
+    return null; // Sin configuración SMTP
+  }
+  const port = Number(SMTP_PORT);
+  // Determinar secure automáticamente si no está definido claramente
+  const secureFlagEnv = String(SMTP_SECURE || '').trim().toLowerCase();
+  const secure = secureFlagEnv === 'true' ? true : secureFlagEnv === 'false' ? false : port === 465;
+  const useRequireTLS = !secure && (port === 587 || port === 25);
+  const transportOpts = {
+    host: SMTP_HOST,
+    port,
+    secure,
+    auth: { user: SMTP_USER, pass: SMTP_PASS },
+    requireTLS: useRequireTLS,
+    tls: { minVersion: 'TLSv1.2' },
+    logger: SMTP_DEBUG === 'true',
+    debug: SMTP_DEBUG === 'true',
+  };
+  mailTransport = nodemailer.createTransport(transportOpts);
+  return mailTransport;
+}
+
+async function sendVerificationEmail({ to, subject, text, html }) {
+  const transporter = getMailTransport();
+  if (!transporter) return { sent: false, reason: 'SMTP no configurado' };
+  const from = process.env.FROM_EMAIL || 'no-reply@example.com';
+  try {
+    const info = await transporter.sendMail({ from, to, subject, text, html });
+    return { sent: true, messageId: info.messageId };
+  } catch (err) {
+    console.error('Error enviando correo:', err);
+    return { sent: false, reason: 'Fallo al enviar correo', error: err };
+  }
+}
 
 // Login local
 router.post('/login', (req, res, next) => {
@@ -20,11 +62,19 @@ router.post('/login', (req, res, next) => {
 
 // Inicio flujo Google
 router.get('/google', (req, res, next) => {
+  const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET } = process.env;
+  if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
+    return res.status(501).json({ message: 'Google OAuth no configurado' });
+  }
   passport.authenticate('google', { scope: ['profile', 'email'], session: false })(req, res, next);
 });
 
 // Callback Google
 router.get('/google/callback', (req, res, next) => {
+  const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET } = process.env;
+  if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
+    return res.status(501).json({ message: 'Google OAuth no configurado' });
+  }
   passport.authenticate('google', { session: false }, (err, user, info) => {
     if (err) return next(err);
     if (!user) return res.status(401).json({ message: info && info.message ? info.message : 'No autorizado' });
@@ -37,6 +87,7 @@ router.get('/google/callback', (req, res, next) => {
 // Registro de usuario (self-signup)
 const bcrypt = require('bcryptjs');
 const { UsuarioEntity } = require('../../entities/index');
+const crypto = require('crypto');
 router.post('/register', async (req, res) => {
   try {
     let { correo, contraseña, nombre, rut_chileno, rol } = req.body;
@@ -94,6 +145,158 @@ router.post('/change-password', authenticateJWT, async (req, res) => {
   } catch (err) {
     console.error(err);
     return res.status(400).json({ message: 'Error al cambiar contraseña' });
+  }
+});
+
+// Solicitar cambio de correo (envía token de verificación al correo actual)
+router.post('/request-email-change', authenticateJWT, async (req, res) => {
+  try {
+    const { nuevo_correo } = req.body;
+    if (!nuevo_correo) return res.status(400).json({ message: 'nuevo_correo es requerido' });
+    const user = await UsuarioEntity.findByPk(req.user.id);
+    if (!user) return res.status(404).json({ message: 'Usuario no encontrado' });
+    const newEmail = String(nuevo_correo).toLowerCase().trim();
+    if (newEmail === user.correo) return res.status(400).json({ message: 'El nuevo correo es igual al actual' });
+    const exists = await UsuarioEntity.findOne({ where: { correo: newEmail } });
+    if (exists) return res.status(409).json({ message: 'Correo ya registrado' });
+    const token = crypto.randomBytes(24).toString('hex');
+    const expires = new Date(Date.now() + 15 * 60 * 1000);
+    await user.update({ email_change_new: newEmail, email_change_token: token, email_change_expires: expires });
+    // Enviar correo real al correo actual con el token
+    const subject = 'Verificación de cambio de correo';
+    const text = `Hola ${user.nombre || ''},\n\n` +
+      `Solicitaste cambiar tu correo a: ${newEmail}.\n` +
+      `Usa este token para confirmar: ${token}.\n` +
+      `Este token expira a las ${expires.toISOString()}.\n\n` +
+      `Si no solicitaste este cambio, ignora este mensaje.`;
+    const html = `<p>Hola ${user.nombre || ''},</p>
+      <p>Solicitaste cambiar tu correo a: <b>${newEmail}</b>.</p>
+      <p>Usa este token para confirmar: <code>${token}</code>.</p>
+      <p>Este token expira a las <b>${expires.toISOString()}</b>.</p>
+      <p>Si no solicitaste este cambio, ignora este mensaje.</p>`;
+    const mail = await sendVerificationEmail({ to: user.correo, subject, text, html });
+    const response = { message: 'Token de verificación generado', expiresAt: user.email_change_expires };
+    if (process.env.NODE_ENV !== 'production') response.debugToken = token;
+    if (!mail || !mail.sent) {
+      response.email = { sent: false, reason: (mail && mail.reason) || 'No enviado' };
+      // En producción, si falla el envío, devolver 500
+      if (process.env.NODE_ENV === 'production') {
+        return res.status(500).json({ message: 'No se pudo enviar el correo de verificación' });
+      }
+    } else {
+      response.email = { sent: true };
+    }
+    return res.status(200).json(response);
+  } catch (err) {
+    console.error(err);
+    return res.status(400).json({ message: 'Error al solicitar cambio de correo' });
+  }
+});
+
+// Confirmar cambio de correo (requiere token)
+router.post('/confirm-email-change', authenticateJWT, async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token) return res.status(400).json({ message: 'token es requerido' });
+    const user = await UsuarioEntity.findByPk(req.user.id);
+    if (!user) return res.status(404).json({ message: 'Usuario no encontrado' });
+    if (!user.email_change_token || !user.email_change_expires || !user.email_change_new) {
+      return res.status(400).json({ message: 'No hay cambio de correo pendiente' });
+    }
+    if (user.email_change_token !== token) {
+      return res.status(401).json({ message: 'Token inválido' });
+    }
+    if (new Date() > new Date(user.email_change_expires)) {
+      await user.update({ email_change_token: null, email_change_expires: null, email_change_new: null });
+      return res.status(410).json({ message: 'Token expirado' });
+    }
+    const newEmail = user.email_change_new;
+    await user.update({ correo: newEmail, email_change_token: null, email_change_expires: null, email_change_new: null });
+    const tokenJwt = signToken(user);
+    return res.status(200).json({ message: 'Correo actualizado', token: tokenJwt });
+  } catch (err) {
+    console.error(err);
+    return res.status(400).json({ message: 'Error al confirmar cambio de correo' });
+  }
+});
+
+// Solicitar cambio de contraseña (envía token al correo actual)
+router.post('/request-password-change', authenticateJWT, async (req, res) => {
+  try {
+    const user = await UsuarioEntity.findByPk(req.user.id);
+    if (!user) return res.status(404).json({ message: 'Usuario no encontrado' });
+    const token = crypto.randomBytes(24).toString('hex');
+    const expires = new Date(Date.now() + 15 * 60 * 1000);
+    await user.update({ password_change_token: token, password_change_expires: expires });
+    // Enviar correo real al correo actual con el token
+    const subject = 'Verificación de cambio de contraseña';
+    const text = `Hola ${user.nombre || ''},\n\n` +
+      `Solicitaste cambiar tu contraseña.\n` +
+      `Usa este token para confirmar: ${token}.\n` +
+      `Este token expira a las ${expires.toISOString()}.\n\n` +
+      `Si no solicitaste este cambio, ignora este mensaje.`;
+    const html = `<p>Hola ${user.nombre || ''},</p>
+      <p>Solicitaste cambiar tu contraseña.</p>
+      <p>Usa este token para confirmar: <code>${token}</code>.</p>
+      <p>Este token expira a las <b>${expires.toISOString()}</b>.</p>
+      <p>Si no solicitaste este cambio, ignora este mensaje.</p>`;
+    const mail = await sendVerificationEmail({ to: user.correo, subject, text, html });
+    const response = { message: 'Token de verificación generado', expiresAt: user.password_change_expires };
+    if (process.env.NODE_ENV !== 'production') response.debugToken = token;
+    if (!mail || !mail.sent) {
+      response.email = { sent: false, reason: (mail && mail.reason) || 'No enviado' };
+      if (process.env.NODE_ENV === 'production') {
+        return res.status(500).json({ message: 'No se pudo enviar el correo de verificación' });
+      }
+    } else {
+      response.email = { sent: true };
+    }
+    return res.status(200).json(response);
+  } catch (err) {
+    console.error(err);
+    return res.status(400).json({ message: 'Error al solicitar cambio de contraseña' });
+  }
+});
+
+// Confirmar cambio de contraseña (requiere token y nueva contraseña)
+router.post('/confirm-password-change', authenticateJWT, async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+    if (!token || !newPassword) return res.status(400).json({ message: 'token y newPassword son requeridos' });
+    const user = await UsuarioEntity.findByPk(req.user.id);
+    if (!user) return res.status(404).json({ message: 'Usuario no encontrado' });
+    if (!user.password_change_token || !user.password_change_expires) {
+      return res.status(400).json({ message: 'No hay cambio de contraseña pendiente' });
+    }
+    if (user.password_change_token !== token) {
+      return res.status(401).json({ message: 'Token inválido' });
+    }
+    if (new Date() > new Date(user.password_change_expires)) {
+      await user.update({ password_change_token: null, password_change_expires: null });
+      return res.status(410).json({ message: 'Token expirado' });
+    }
+    const hashed = await bcrypt.hash(newPassword, 10);
+    await user.update({ contraseña: hashed, password_change_token: null, password_change_expires: null });
+    return res.status(200).json({ message: 'Contraseña actualizada' });
+  } catch (err) {
+    console.error(err);
+    return res.status(400).json({ message: 'Error al confirmar cambio de contraseña' });
+  }
+});
+
+// Actualizar nombre (no requiere verificación por correo)
+router.patch('/update-name', authenticateJWT, async (req, res) => {
+  try {
+    const { nombre } = req.body;
+    if (!nombre) return res.status(400).json({ message: 'nombre es requerido' });
+    const user = await UsuarioEntity.findByPk(req.user.id);
+    if (!user) return res.status(404).json({ message: 'Usuario no encontrado' });
+    await user.update({ nombre });
+    const tokenJwt = signToken(user);
+    return res.status(200).json({ message: 'Nombre actualizado', token: tokenJwt });
+  } catch (err) {
+    console.error(err);
+    return res.status(400).json({ message: 'Error al actualizar nombre' });
   }
 });
 

@@ -54,8 +54,95 @@ if (DATABASE_URL) {
 async function initDb() {
   try {
     await sequelize.authenticate();
-    // Usa alter para ajustar el esquema a cambios de modelos (p.ej. permitir NULL)
-    await sequelize.sync({ alter: true });
+    // Conversión inline de columnas existentes a arreglos antes del sync
+    // - pymes.tipo_servicio: TEXT -> TEXT[]
+    // - pymes.tipo_atencion: ENUM -> ENUM[] (manteniendo valores 'Presencial', 'A Domicilio', 'Online')
+    await sequelize.query(`
+DO $$
+BEGIN
+  -- Convertir tipo_servicio (TEXT -> TEXT[])
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'pymes'
+      AND column_name = 'tipo_servicio'
+      AND data_type <> 'ARRAY'
+  ) THEN
+    ALTER TABLE "public"."pymes"
+      ALTER COLUMN "tipo_servicio" DROP NOT NULL,
+      ALTER COLUMN "tipo_servicio" DROP DEFAULT,
+      ALTER COLUMN "tipo_servicio" TYPE text[]
+      USING CASE
+        WHEN "tipo_servicio" IS NULL OR "tipo_servicio" = '' THEN ARRAY[]::text[]
+        ELSE ARRAY["tipo_servicio"]::text[]
+      END;
+  END IF;
+
+  -- Asegurar tipo ENUM y convertir tipo_atencion (ENUM -> ENUM[])
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'pymes'
+      AND column_name = 'tipo_atencion'
+      AND data_type <> 'ARRAY'
+  ) THEN
+    BEGIN
+      CREATE TYPE "public"."enum_pymes_tipo_atencion" AS ENUM ('Presencial', 'A Domicilio', 'Online');
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+    ALTER TABLE "public"."pymes"
+      ALTER COLUMN "tipo_atencion" DROP NOT NULL,
+      ALTER COLUMN "tipo_atencion" DROP DEFAULT,
+      ALTER COLUMN "tipo_atencion" TYPE "public"."enum_pymes_tipo_atencion"[]
+      USING CASE
+        WHEN "tipo_atencion" IS NULL THEN ARRAY[]::"public"."enum_pymes_tipo_atencion"[]
+        ELSE ARRAY["tipo_atencion"]::"public"."enum_pymes_tipo_atencion"[]
+      END;
+  END IF;
+
+  -- Convertir etiquetas (TEXT -> JSONB)
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'pymes'
+      AND column_name = 'etiquetas'
+      AND data_type <> 'jsonb'
+  ) THEN
+    ALTER TABLE "public"."pymes"
+      ALTER COLUMN "etiquetas" DROP NOT NULL,
+      ALTER COLUMN "etiquetas" DROP DEFAULT,
+      ALTER COLUMN "etiquetas" TYPE jsonb
+      USING CASE
+        WHEN "etiquetas" IS NULL THEN NULL
+        ELSE to_jsonb("etiquetas")
+      END;
+  END IF;
+
+  -- Convertir redes (TEXT -> JSONB)
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'pymes'
+      AND column_name = 'redes'
+      AND data_type <> 'jsonb'
+  ) THEN
+    ALTER TABLE "public"."pymes"
+      ALTER COLUMN "redes" DROP NOT NULL,
+      ALTER COLUMN "redes" DROP DEFAULT,
+      ALTER COLUMN "redes" TYPE jsonb
+      USING CASE
+        WHEN "redes" IS NULL THEN NULL
+        ELSE to_jsonb("redes")
+      END;
+  END IF;
+END $$;
+`);
+    // Sync sin alter para evitar casts erróneos en ENUM[] generados por Sequelize
+    await sequelize.sync();
     console.log('DB conectada:', DB_HOST + ':' + DB_PORT, 'DB:', DB_NAME);
   } catch (err) {
     console.error('Error inicializando DB', err);

@@ -38,3 +38,5 @@ const PORT = process.env.PORT || 3000;
     process.exit(1);
   }
 })();
+// Cargar variables de entorno desde .env si existe
+require('dotenv').config();
