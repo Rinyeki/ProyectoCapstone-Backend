@@ -140,6 +140,18 @@ BEGIN
       END;
   END IF;
 
+  -- Añadir columna comunas_cobertura (JSONB) si no existe
+  IF NOT EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'pymes'
+      AND column_name = 'comunas_cobertura'
+  ) THEN
+    ALTER TABLE "public"."pymes"
+      ADD COLUMN "comunas_cobertura" jsonb NULL;
+  END IF;
+
   -- Añadir columna de cooldown para solicitud de cambio de correo si no existe
   IF NOT EXISTS (
     SELECT 1

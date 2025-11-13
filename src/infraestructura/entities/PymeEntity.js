@@ -57,6 +57,10 @@ PymeEntity.init(
       type: DataTypes.TEXT,
       allowNull: true,
     },
+    comunas_cobertura: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+    },
     // Múltiples tipos de servicio (array)
     tipo_servicio: {
       type: DataTypes.ARRAY(DataTypes.TEXT),

@@ -12,6 +12,7 @@ class Pyme {
     this.telefono = props.telefono;
     this.direccion = props.direccion;
     this.comuna = props.comuna;
+    this.comunas_cobertura = props.comunas_cobertura;
     this.tipo_servicio = props.tipo_servicio;
     this.tipo_atencion = props.tipo_atencion;
     this.etiquetas = props.etiquetas;

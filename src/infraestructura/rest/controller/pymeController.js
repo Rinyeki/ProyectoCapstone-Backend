@@ -74,6 +74,13 @@ router.post('/', authenticateJWT, async (req, res) => {
       const toArray = Array.isArray(data.tipo_servicio) ? data.tipo_servicio : [data.tipo_servicio];
       data.tipo_servicio = toArray.map((v) => String(v).trim()).filter((v) => v.length > 0);
     }
+    // Normalización para comunas_cobertura (JSONB array de strings)
+    if (data.comunas_cobertura) {
+      const toArray = Array.isArray(data.comunas_cobertura) ? data.comunas_cobertura : [data.comunas_cobertura];
+      data.comunas_cobertura = toArray
+        .map((v) => String(v).trim())
+        .filter((v) => v.length > 0);
+    }
     // Normalización para etiquetas (JSONB): aceptar array u string
     if (data.etiquetas) {
       if (Array.isArray(data.etiquetas)) {
@@ -156,6 +163,13 @@ router.put('/:id', authenticateJWT, authorizePymeOwnershipOrAdmin, async (req, r
     if (data.tipo_servicio) {
       const toArray = Array.isArray(data.tipo_servicio) ? data.tipo_servicio : [data.tipo_servicio];
       data.tipo_servicio = toArray.map((v) => String(v).trim()).filter((v) => v.length > 0);
+    }
+    // Normalización para comunas_cobertura (JSONB array de strings)
+    if (data.comunas_cobertura) {
+      const toArray = Array.isArray(data.comunas_cobertura) ? data.comunas_cobertura : [data.comunas_cobertura];
+      data.comunas_cobertura = toArray
+        .map((v) => String(v).trim())
+        .filter((v) => v.length > 0);
     }
     // Normalización para etiquetas (JSONB)
     if (data.etiquetas) {

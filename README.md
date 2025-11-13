@@ -92,6 +92,23 @@ Pymes (`/pymes`):
 - `PUT /pymes/:id` – Actualiza pyme (admin o dueño).
 - `DELETE /pymes/:id` – Elimina pyme (admin o dueño).
 
+Campos de Pyme relevantes para ubicación:
+- `comuna`: comuna principal donde opera físicamente la pyme (string).
+- `comunas_cobertura`: comunas adicionales donde la pyme ofrece entrega/atención (JSON array de strings). Acepta string o array en la API y se normaliza a array.
+
+Ejemplo `POST /pymes` payload:
+```
+{
+  "nombre": "Panadería Las Delicias",
+  "rut_empresa": "12.345.678-5",
+  "rut_chileno": "12.345.678-5",
+  "comuna": "Santiago",
+  "comunas_cobertura": ["Providencia", "Ñuñoa"],
+  "tipo_atencion": ["Presencial", "A Domicilio"],
+  "tipo_servicio": ["Panadería", "Pastelería"]
+}
+```
+
 Notas:
 - Autenticación JWT: enviar `Authorization: Bearer <token>`.
 - El JWT incluye `id`, `rol`, `rut_chileno`, `correo`, `nombre`.

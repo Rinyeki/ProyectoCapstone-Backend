@@ -28,6 +28,7 @@ const PymeMapper = {
       telefono: entity.telefono,
       direccion: entity.direccion,
       comuna: entity.comuna,
+      comunas_cobertura: entity.comunas_cobertura,
       tipo_servicio: entity.tipo_servicio,
       tipo_atencion: entity.tipo_atencion,
       etiquetas: entity.etiquetas,
