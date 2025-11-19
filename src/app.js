@@ -3,10 +3,20 @@ const pymesController = require('./infraestructura/rest/controller/pymeControlle
 const usuariosController = require('./infraestructura/rest/controller/usuarioController');
 const authController = require('./infraestructura/rest/controller/authController');
 const passport = require('passport');
+const cors = require('cors');
 
 const app = express();
 
-app.use(express.json());
+app.use(express.json({ limit: '20mb' }));
+const allowedOrigin = process.env.FRONTEND_ORIGIN || 'http://localhost:4321';
+const corsOptions = {
+  origin: allowedOrigin,
+  methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
+  allowedHeaders: ['Content-Type','Authorization'],
+  credentials: true,
+};
+app.use(cors(corsOptions));
+
 app.use(passport.initialize());
 
 // Healthcheck

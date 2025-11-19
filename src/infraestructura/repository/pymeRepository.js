@@ -5,10 +5,27 @@ const { normalizeRut } = require('../../domain/utils/rut');
 
 class PymeSequelizeRepository extends PymesRepository {
   async findAll(filters = {}) {
+    const { Op } = require('sequelize');
+    const { limit, offset, ...query } = filters;
+    const where = { ...query };
+    if (filters.comunas_cobertura) {
+      const val = Array.isArray(filters.comunas_cobertura) ? filters.comunas_cobertura : [filters.comunas_cobertura];
+      where.comunas_cobertura = { [Op.contains]: val };
+    }
+    if (filters.tipo_atencion) {
+      const val2 = Array.isArray(filters.tipo_atencion) ? filters.tipo_atencion : [filters.tipo_atencion];
+      where.tipo_atencion = { [Op.contains]: val2 };
+    }
+    if (filters.etiquetas) {
+      const val3 = Array.isArray(filters.etiquetas) ? filters.etiquetas : [filters.etiquetas];
+      where.etiquetas = { [Op.contains]: val3 };
+    }
     const entities = await PymeEntity.findAll({
-      where: { ...filters },
+      where,
       order: [['id', 'ASC']],
       include: [{ model: UsuarioEntity, as: 'usuario' }],
+      limit: typeof limit !== 'undefined' ? Number(limit) : undefined,
+      offset: typeof offset !== 'undefined' ? Number(offset) : undefined,
     });
     return PymeMapper.toDomainList(entities);
   }

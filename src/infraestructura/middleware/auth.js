@@ -43,7 +43,8 @@ function authorizeSelfOrAdmin(paramName = 'id') {
   return (req, res, next) => {
     if (!req.user) return res.status(401).json({ message: 'No autenticado' });
     const reqId = Number(req.params[paramName]);
-    if (req.user.rol === 'administrador' || req.user.id === reqId) {
+    const userId = Number(req.user.id);
+    if (req.user.rol === 'administrador' || userId === reqId) {
       return next();
     }
     return res.status(403).json({ message: 'No autorizado' });

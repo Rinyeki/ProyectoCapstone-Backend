@@ -10,7 +10,7 @@ const repository = new PymeSequelizeRepository();
 const useCase = new PymeUseCase(repository);
 
 // Listar pymes: solo admin (usuarios normales usan /usuarios/:id/pymes)
-router.get('/', authenticateJWT, authorizeRole('administrador'), async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const pymes = await useCase.list(req.query);
     res.json(pymes);
@@ -22,7 +22,7 @@ router.get('/', authenticateJWT, authorizeRole('administrador'), async (req, res
 
 // Obtener pyme por id
 // Obtener pyme por id: admin o dueño
-router.get('/:id', authenticateJWT, authorizePymeOwnershipOrAdmin, async (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
     const pyme = await useCase.getById(req.params.id);
     if (!pyme) return res.status(404).json({ message: 'Pyme no encontrada' });
@@ -38,9 +38,16 @@ router.get('/:id', authenticateJWT, authorizePymeOwnershipOrAdmin, async (req, r
 router.post('/', authenticateJWT, async (req, res) => {
   try {
     const data = { ...req.body };
-    // Si no es admin, fuerza propiedad
+    // Si no es admin, fuerza propiedad (si el token no trae rut, reconsulta en DB)
     if (req.user.rol !== 'administrador') {
       data.rut_chileno = req.user.rut_chileno;
+      if (!data.rut_chileno) {
+        try {
+          const { UsuarioEntity } = require('../../entities/index');
+          const u = await UsuarioEntity.findByPk(req.user.id);
+          if (u && u.rut_chileno) data.rut_chileno = u.rut_chileno;
+        } catch {}
+      }
       if (!data.rut_chileno) {
         return res.status(400).json({ message: 'Debe asignar su RUT antes de crear pymes' });
       }
@@ -50,7 +57,15 @@ router.post('/', authenticateJWT, async (req, res) => {
         return res.status(400).json({ message: 'RUT inválido. Formato esperado: 12345678-K' });
       }
     }
-    // Validación de rut_empresa
+    // Tipo: independiente o empresa
+    const esIndependiente = String(data.es_independiente || '').toLowerCase() === 'true' || data.es_independiente === true;
+    if (esIndependiente) {
+      if (!data.rut_chileno) {
+        return res.status(400).json({ message: 'rut_chileno requerido para pyme independiente' });
+      }
+      data.rut_empresa = data.rut_chileno;
+    }
+    // Validación de rut_empresa (requerido siempre, pero puede venir del propio rut si es independiente)
     if (!data.rut_empresa) {
       return res.status(400).json({ message: 'rut_empresa es requerido' });
     }
@@ -124,7 +139,10 @@ router.post('/', authenticateJWT, async (req, res) => {
     res.status(201).json(creada);
   } catch (err) {
     console.error(err);
-    res.status(400).json({ message: 'Error al crear pyme' });
+    if (err && (err.name === 'SequelizeUniqueConstraintError' || String(err.message||'').includes('unique'))) {
+      return res.status(409).json({ message: 'RUT de empresa ya registrado' });
+    }
+    res.status(400).json({ message: 'Error al crear pyme', detail: err && err.message ? String(err.message) : undefined });
   }
 });
 

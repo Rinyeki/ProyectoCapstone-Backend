@@ -4,6 +4,9 @@ const nodemailer = require('nodemailer');
 const { configurePassport } = require('../../auth/passport');
 const { signToken } = require('../../middleware/auth');
 const { normalizeRut, isValidRut } = require('../../../domain/utils/rut');
+const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
+const { UsuarioEntity } = require('../../entities/index');
 
 const router = express.Router();
 configurePassport();
@@ -70,10 +73,70 @@ router.get('/google', (req, res, next) => {
 });
 
 // Callback Google
-router.get('/google/callback', (req, res, next) => {
-  const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET } = process.env;
+router.get('/google/callback', async (req, res, next) => {
+  const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_CALLBACK_URL } = process.env;
   if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
     return res.status(501).json({ message: 'Google OAuth no configurado' });
+  }
+  const direct = String(req.query.direct || '').trim();
+  const front = String(req.query.front || '').trim();
+  if (direct === '1') {
+    try {
+      const code = req.query.code;
+      if (!code) return res.status(400).json({ message: 'code requerido' });
+      const params = new URLSearchParams({
+        client_id: GOOGLE_CLIENT_ID,
+        client_secret: GOOGLE_CLIENT_SECRET,
+        code: String(code),
+        grant_type: 'authorization_code',
+        redirect_uri: GOOGLE_CALLBACK_URL || 'http://localhost:4321/auth/google/callback',
+      });
+      const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params.toString(),
+      });
+      const tokenJson = await tokenRes.json();
+      if (!tokenRes.ok || !tokenJson.access_token) {
+        return res.status(401).json({ message: 'No autorizado' });
+      }
+      const infoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: { Authorization: `Bearer ${tokenJson.access_token}` },
+      });
+      const profile = await infoRes.json();
+      const emailRaw = profile && profile.email ? profile.email : null;
+      if (!emailRaw) return res.status(401).json({ message: 'Google no entregó correo' });
+      const email = String(emailRaw).toLowerCase();
+      let user = await UsuarioEntity.findOne({ where: { correo: email } });
+      if (!user) {
+        const displayName = profile.name || email.split('@')[0];
+        const random = crypto.randomBytes(16).toString('hex');
+        const hashed = await bcrypt.hash(random, 10);
+        user = await UsuarioEntity.create({
+          correo: email,
+          contraseña: hashed,
+          nombre: displayName,
+          rut_chileno: null,
+          rol: 'usuario',
+        });
+      }
+      const token = signToken(user);
+      const requiresRut = !user.rut_chileno;
+      if (front === '1') {
+        const html = `<!doctype html><html><head><meta charset="utf-8"><title>Google Login</title></head><body>
+<script>
+  (function(){
+    try { if (window.opener) { window.opener.postMessage({ type: 'auth', token: '${token}', requiresRut: ${requiresRut} }, '*'); } } catch(e) {}
+    try { window.close(); } catch(e) { location.href = '/'; }
+  })();
+</script>
+</body></html>`;
+        return res.status(200).send(html);
+      }
+      return res.json({ token, requiresRut });
+    } catch (err) {
+      return res.status(500).json({ message: 'Error en intercambio de código' });
+    }
   }
   passport.authenticate('google', { session: false }, (err, user, info) => {
     if (err) return next(err);
@@ -85,9 +148,6 @@ router.get('/google/callback', (req, res, next) => {
 });
 
 // Registro de usuario (self-signup)
-const bcrypt = require('bcryptjs');
-const { UsuarioEntity } = require('../../entities/index');
-const crypto = require('crypto');
 router.post('/register', async (req, res) => {
   try {
     let { correo, contraseña, nombre, rut_chileno, rol } = req.body;
@@ -303,7 +363,9 @@ router.post('/set-rut', authenticateJWT, async (req, res) => {
     const other = await UsuarioEntity.findOne({ where: { rut_chileno } });
     if (other) return res.status(409).json({ message: 'RUT ya registrado' });
     await user.update({ rut_chileno });
-    return res.status(200).json({ message: 'RUT asignado' });
+    await user.reload();
+    const tokenJwt = signToken(user);
+    return res.status(200).json({ message: 'RUT asignado', token: tokenJwt, requiresRut: false });
   } catch (err) {
     console.error(err);
     return res.status(400).json({ message: 'Error al asignar RUT' });
