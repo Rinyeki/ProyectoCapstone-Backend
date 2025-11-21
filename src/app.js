@@ -4,6 +4,11 @@ const usuariosController = require('./infraestructura/rest/controller/usuarioCon
 const authController = require('./infraestructura/rest/controller/authController');
 const passport = require('passport');
 const cors = require('cors');
+const { setupAssociations } = require('./infraestructura/entities/index');
+const { initDb } = require('./infraestructura/db/sequelize');
+
+setupAssociations();
+initDb().catch((err) => { console.error('DB init failed', err) });
 
 const app = express();
 
