@@ -142,7 +142,8 @@ router.post('/', authenticateJWT, async (req, res) => {
     if (err && (err.name === 'SequelizeUniqueConstraintError' || String(err.message||'').includes('unique'))) {
       return res.status(409).json({ message: 'RUT de empresa ya registrado' });
     }
-    res.status(400).json({ message: 'Error al crear pyme', detail: err && err.message ? String(err.message) : undefined });
+    const d = err && err.parent && err.parent.detail ? String(err.parent.detail) : err && err.message ? String(err.message) : undefined;
+    res.status(400).json({ message: 'Error al crear pyme', detail: d });
   }
 });
 
@@ -230,7 +231,8 @@ router.put('/:id', authenticateJWT, authorizePymeOwnershipOrAdmin, async (req, r
     res.json(actualizada);
   } catch (err) {
     console.error(err);
-    res.status(400).json({ message: 'Error al actualizar pyme' });
+    const d = err && err.parent && err.parent.detail ? String(err.parent.detail) : err && err.message ? String(err.message) : undefined;
+    res.status(400).json({ message: 'Error al actualizar pyme', detail: d });
   }
 });
 
