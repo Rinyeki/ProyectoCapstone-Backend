@@ -143,6 +143,17 @@ router.get('/google/callback', async (req, res, next) => {
     if (!user) return res.status(401).json({ message: info && info.message ? info.message : 'No autorizado' });
     const token = signToken(user);
     const requiresRut = !user.rut_chileno;
+    if (front === '1') {
+      const html = `<!doctype html><html><head><meta charset="utf-8"><title>Google Login</title></head><body>
+<script>
+(function(){
+  try { if (window.opener) { window.opener.postMessage({ type: 'auth', token: '${token}', requiresRut: ${requiresRut} }, '*'); } } catch(e) {}
+  try { window.close(); } catch(e) { location.href = '/'; }
+})();
+</script>
+</body></html>`;
+      return res.status(200).send(html);
+    }
     return res.json({ token, requiresRut });
   })(req, res, next);
 });
