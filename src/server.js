@@ -8,7 +8,6 @@ const PORT = process.env.PORT || 3000;
   try {
     setupAssociations();
     await initDb();
-    // Seed básico si la tabla de usuarios está vacía
     const uCount = await UsuarioEntity.count();
     if (uCount === 0) {
       await UsuarioEntity.create({

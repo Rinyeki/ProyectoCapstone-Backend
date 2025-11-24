@@ -32,7 +32,7 @@ function configurePassport() {
     )
   );
 
-  // Estrategia Google OAuth2 (solo login para usuarios existentes por correo)
+  // Estrategia Google OAuth2 
   const clientID = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
   const callbackURL = process.env.GOOGLE_CALLBACK_URL || '/auth/google/callback';
@@ -67,7 +67,7 @@ function configurePassport() {
     );
   }
 
-  // Sin sesiones; serialización mínima
+  // Sin sesiones
   passport.serializeUser((user, done) => done(null, user.id));
   passport.deserializeUser(async (id, done) => {
     try {
