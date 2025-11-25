@@ -58,6 +58,15 @@ class UsuarioSequelizeRepository extends UsuariosRepository {
   }
 
   async delete(id) {
+    // Borrado en cascada: eliminar pymes asociadas por rut_chileno antes de eliminar usuario
+    const user = await UsuarioEntity.findByPk(id);
+    if (!user) return false;
+    const rut = user.rut_chileno ? String(user.rut_chileno) : null;
+    if (rut) {
+      try {
+        await PymeEntity.destroy({ where: { rut_chileno: rut } });
+      } catch (e) {}
+    }
     const count = await UsuarioEntity.destroy({ where: { id } });
     return count > 0;
   }
