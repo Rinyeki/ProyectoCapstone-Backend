@@ -18,7 +18,21 @@ const allowedOrigins = String(allowedOriginsRaw).split(',').map(s => s.trim()).f
 const corsOptions = {
   origin: (origin, cb) => {
     if (!origin) return cb(null, true);
-    const ok = allowedOrigins.includes(origin) || allowedOrigins.includes('*');
+    const matchExact = allowedOrigins.includes(origin);
+    const matchStar = allowedOrigins.includes('*');
+    const matchWildcard = allowedOrigins.some((o) => {
+      if (!o) return false;
+      if (o.startsWith('*.')) {
+        const suffix = o.slice(1);
+        return origin.endsWith(suffix);
+      }
+      if (o.startsWith('https://*.')) {
+        const suffix = o.replace('https://*', '');
+        return origin.endsWith(suffix);
+      }
+      return false;
+    });
+    const ok = matchExact || matchStar || matchWildcard;
     cb(null, ok);
   },
   methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
@@ -26,6 +40,7 @@ const corsOptions = {
   credentials: true,
 };
 app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 
 app.use(passport.initialize());
 
