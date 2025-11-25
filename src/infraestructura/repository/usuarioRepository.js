@@ -26,11 +26,15 @@ class UsuarioSequelizeRepository extends UsuariosRepository {
   }
 
   async findAll(filters = {}) {
-    const entities = await UsuarioEntity.findAll({
-      where: { ...filters },
+    const { limit, offset, ...where } = filters || {}
+    const query = {
+      where,
       order: [['id', 'ASC']],
-    });
-    return entities.map(UsuarioMapper.toDomain);
+    }
+    if (limit !== undefined) query.limit = Number(limit)
+    if (offset !== undefined) query.offset = Number(offset)
+    const entities = await UsuarioEntity.findAll(query)
+    return entities.map(UsuarioMapper.toDomain)
   }
 
   async create(data) {
