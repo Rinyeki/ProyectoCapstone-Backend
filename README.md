@@ -53,16 +53,6 @@ src/
 
 La base de datos usa Postgres y se configura con variables de entorno.
 
-### Variables de entorno
-
-```
-DB_NAME=nombre_base
-DB_USER=usuario
-DB_PASSWORD=contraseña
-DB_HOST=host
-DB_PORT=5432
-```
-
 ## Endpoints
 
 Autenticación (`/auth`):
