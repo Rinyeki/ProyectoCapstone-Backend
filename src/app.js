@@ -13,7 +13,7 @@ initDb().catch((err) => { console.error('DB init failed', err) });
 const app = express();
 
 app.use(express.json({ limit: '20mb' }));
-const allowedOriginsRaw = process.env.FRONTEND_ORIGINS || process.env.FRONTEND_ORIGIN || 'http://localhost:4321';
+const allowedOriginsRaw = process.env.FRONTEND_ORIGINS || process.env.FRONTEND_ORIGIN || 'http://localhost:4321,https://proyecto-capstone-frontend.vercel.app';
 const allowedOrigins = String(allowedOriginsRaw).split(',').map(s => s.trim()).filter(Boolean);
 const corsOptions = {
   origin: (origin, cb) => {
